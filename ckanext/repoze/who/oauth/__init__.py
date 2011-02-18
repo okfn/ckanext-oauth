@@ -1,10 +1,11 @@
 import json
 import logging
-from zope.interface import implements
+from zope.interface import implements, directlyProvides
 from repoze.who.interfaces import IIdentifier
 from repoze.who.interfaces import IChallenger
 from repoze.who.plugins.auth_tkt import AuthTktCookiePlugin
-from webob import Response
+from repoze.who.interfaces import IChallengeDecider
+from webob import Request, Response
 import urlparse
 import oauth2 as oauth
 
@@ -53,6 +54,8 @@ class OAuthIdentifierPlugin(AuthTktCookiePlugin):
 
     # challenge
     def challenge(self, environ, status, app_headers, forget_headers):
+        if environ.get('ckan.who.oauth.challenge'):
+            del(environ['ckan.who.oauth.challenge'])
         request_token, _ = self._get_request_token()
         res = Response()
         res.status = 302
@@ -70,6 +73,13 @@ class OAuthIdentifierPlugin(AuthTktCookiePlugin):
         rememberer = self._get_rememberer(environ)
         identity = rememberer and rememberer.identify(environ) or {}
         logging.info("Identify: got remembered identity %r" % dict(identity))
+        request = Request(environ)
+        if request.params.get('oauth_login'):
+            # XXX I believe that in repoze.who 2.x this can be
+            # replaced with an IAPI call
+            environ['ckan.who.oauth.challenge'] = True
+            identity['ckan.who.oauth.challenge'] = True
+            return identity
         userdata = identity.get('userdata', '')
         found = 'oauth_token' in userdata
         #import pdb; pdb.set_trace()
@@ -96,7 +106,11 @@ class OAuthIdentifierPlugin(AuthTktCookiePlugin):
         if identity.get('ckan.who.oauth_token')\
                and 'repoze.who.userid' not in identity:
             # this key indicates the user is "pre-authenticated";
-            # we set it accordingly
+            # we set it accordingly.  XXX this is repoze.who 1.x
+            # style; in 2.x auth_tkt is an IAuthenticator, instead of
+            # relying on this magic value
+            if environ.get('ckan.who.oauth.challenge'):
+                del(environ['ckan.who.oauth.challenge'])
             identity = self.preauthenticate(environ, identity)
         return identity or None
 
@@ -150,3 +164,20 @@ class OAuthIdentifierPlugin(AuthTktCookiePlugin):
 
     def __repr__(self):
         return '<%s %s>' % (self.__class__.__name__, id(self))
+
+
+def oauth_challenge_decider(environ, status, headers):
+    # we do the default if it's a 401, probably we show a form then
+    if status.startswith('401 '):
+        return True
+    elif 'ckan.who.oauth.challenge' in environ:
+        # in case IIdentification found an oauth path it should be in
+        # the environ and we do the challenge
+        return True
+    elif 'repoze.whoplugins.openid.openid' in environ:
+        # handle the openid plugin too
+        return True
+
+    return False
+
+directlyProvides(oauth_challenge_decider, IChallengeDecider)
