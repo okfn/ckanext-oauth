@@ -20,6 +20,7 @@ setup(
 	include_package_data=True,
 	zip_safe=False,
 	install_requires=[
+                'oauth2'
 		# -*- Extra requirements: -*-
 	],
 	entry_points=\
