@@ -7,7 +7,6 @@ from repoze.who.plugins.auth_tkt import AuthTktCookiePlugin
 from repoze.who.interfaces import IChallengeDecider
 from webob import Request, Response
 import urlparse
-import oauth2 as oauth
 
 from ckan.model import User, Session
 
@@ -28,18 +27,19 @@ class OAuthIdentifierPlugin(AuthTktCookiePlugin):
                  access_token_url='',
                  authorize_url='',
                  user_url=''):
+        import oauth2 as oauth
         self.consumer_key = consumer_key
         self.consumer_secret = consumer_secret
         self.request_token_url = request_token_url
         self.access_token_url = access_token_url
         self.authorize_url = authorize_url
         self.user_url = user_url
+        self.consumer = oauth.Consumer(self.consumer_key,
+                                       self.consumer_secret)
+        self.client = oauth.Client(self.consumer)
 
     def _get_request_token(self):
-        consumer = oauth.Consumer(self.consumer_key,
-                                  self.consumer_secret)
-        client = oauth.Client(consumer)
-        resp, content = client.request(self.request_token_url, "GET")
+        resp, content = self.client.request(self.request_token_url, "GET")
         if resp['status'] != '200':
             raise Exception("Invalid response %s." % resp['status'])
         tokens = dict(urlparse.parse_qsl(content))
@@ -70,6 +70,7 @@ class OAuthIdentifierPlugin(AuthTktCookiePlugin):
         # XXX commented out for testing, probably a good idea...
         #if "mi.difi.no" not in environ.get('HTTP_REFERER',''):
         #    return
+        import oauth2 as oauth
         rememberer = self._get_rememberer(environ)
         identity = rememberer and rememberer.identify(environ) or {}
         logging.info("Identify: got remembered identity %r" % dict(identity))
@@ -87,14 +88,13 @@ class OAuthIdentifierPlugin(AuthTktCookiePlugin):
             qstring = environ.get('QUERY_STRING')
             if not qstring:
                 return None
-            consumer = oauth.Consumer(self.consumer_key, self.consumer_secret)
             request_token, request_token_secret = self._get_request_token()
             oauth_verifier = dict(urlparse.parse_qsl(qstring))\
                              .get("oauth_token")
             if oauth_verifier:
                 token = oauth.Token(oauth_verifier,
                                     request_token_secret)
-                client = oauth.Client(consumer, token)
+                client = oauth.Client(self.consumer, token)
                 resp, content = client.request(self.access_token_url, "POST")
                 tokens = dict(urlparse.parse_qsl(content))
                 if 'error' not in tokens:
@@ -132,17 +132,16 @@ class OAuthIdentifierPlugin(AuthTktCookiePlugin):
         # turn the oauth identity into a CKAN one; set it in our identity
         # XXX remember/cache the authentication status for X amount of
         # time
+        import oauth2 as oauth
         try:
             access_token = dict(urlparse.parse_qsl(identity['userdata']))
             oauth_token = access_token['oauth_token']
             oauth_token_secret = access_token['oauth_token_secret']
         except KeyError:
             return None
-        consumer = oauth.Consumer(self.consumer_key,
-                                  self.consumer_secret)
         access_token = oauth.Token(oauth_token,
                                    oauth_token_secret)
-        client = oauth.Client(consumer, access_token)
+        client = oauth.Client(self.consumer, access_token)
         resp, content = client.request(self.user_url, "GET")
         data = json.loads(content)
         user_id = data['id']
