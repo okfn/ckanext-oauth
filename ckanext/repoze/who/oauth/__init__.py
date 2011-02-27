@@ -1,16 +1,23 @@
 import json
 import logging
+import urlparse
+import urllib
+import re
+
 from zope.interface import implements, directlyProvides
+from webob import Request, Response
 from repoze.who.interfaces import IIdentifier
 from repoze.who.interfaces import IChallenger
 from repoze.who.plugins.auth_tkt import AuthTktCookiePlugin
 from repoze.who.interfaces import IChallengeDecider
-from webob import Request, Response
-import urlparse
 
-from ckan.model import User, Session
+from ckan import model
+from ckan.model import User, Session, AuthorizationGroup
+from ckan.model.authorization_group import add_user_to_authorization_group
+from ckan.model.authorization_group import remove_user_from_authorization_group
 
 log = logging.getLogger("ckanext.repoze")
+LOGIN_MAGIC_KEY = "oauth_login"
 
 
 def make_identification_plugin(**kwargs):
@@ -75,7 +82,7 @@ class OAuthIdentifierPlugin(AuthTktCookiePlugin):
         identity = rememberer and rememberer.identify(environ) or {}
         logging.info("Identify: got remembered identity %r" % dict(identity))
         request = Request(environ)
-        if request.params.get('oauth_login'):
+        if request.params.get(LOGIN_MAGIC_KEY):
             # XXX I believe that in repoze.who 2.x this can be
             # replaced with an IAPI call
             environ['ckan.who.oauth.challenge'] = True
@@ -146,7 +153,6 @@ class OAuthIdentifierPlugin(AuthTktCookiePlugin):
         data = json.loads(content)
         user_id = data['id']
         logging.info("Preauth: Got oauth user data for user %s" % user_id)
-        #user_groups = data['groups']
         user = User.by_openid(user_id)
         if user is None:
             user = User(openid=user_id,
@@ -157,12 +163,53 @@ class OAuthIdentifierPlugin(AuthTktCookiePlugin):
             Session.commit()
             Session.remove()
             logging.info("Preauth: Created new user %s" % user_id)
+        user_groups = data['groups']
+        _sync_auth_groups(user, user_groups)
         logging.info("Preauth: Returning user identifier %s" % user.name)
         identity['repoze.who.userid'] = user.name
         return identity
 
     def __repr__(self):
         return '<%s %s>' % (self.__class__.__name__, id(self))
+
+
+def _sync_auth_groups(user, groups):
+    group_pattern = re.compile(r"^(org:)?([0-9]+)/(.+)$")
+    # remove all user groups that originate from oauth service
+    current_groups = Session.query(AuthorizationGroup)\
+                     .filter(AuthorizationGroup.users.contains(user))
+    for group in current_groups:
+        if group_pattern.match(group.name):
+            remove_user_from_authorization_group(user, group)
+
+    # and create/add the relevant ones
+    for group in groups:
+        _, group_id, group_name = group_pattern.match(group).groups()
+        authz_group_name = "%s/%s" % (group_id, group_name)
+        # create an authzgroup if it doesn't exist
+        q = Session.query(AuthorizationGroup)
+        q = q.filter_by(name=authz_group_name)
+        if q.count() == 0:
+            authz_group = AuthorizationGroup(name=authz_group_name)
+            model.Session.add(authz_group)
+            model.Session.commit()
+            model.Session.remove()
+            authz_group = Session.query(AuthorizationGroup)\
+                          .filter_by(name=authz_group_name)\
+                          .all()[0]
+            logging.info("Created new auth group %s" % group_name)
+        elif q.count() == 1:
+            authz_group = q.all()[0]
+        else:
+            raise AssertionError("More than one matching authz group")
+        add_user_to_authorization_group(user,
+                                        authz_group,
+                                        model.Role.ADMIN)
+        model.Session.commit()
+        model.Session.remove()
+        logging.info("Added user %s to auth group %s" % (user.name,
+                                                         authz_group.name))
+                                                         
 
 
 def oauth_challenge_decider(environ, status, headers):
