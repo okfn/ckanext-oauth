@@ -27,6 +27,6 @@ setup(
 	"""
         [ckan.plugins]
 	# Add plugins here, eg
-	# myplugin=ckanext.repoze-who-oauth:PluginClass
+	oauth=ckanext.repoze.who.oauth.extension:CkanOauthPlugin
 	""",
 )
