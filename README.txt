@@ -1,6 +1,7 @@
 This plugin adds oAuth login capability to CKAN.  It is currently
-configured specifically for a particular client (Data.NO) setup,
-specifically for use with their home-brewed oAuth service.
+hard-coded for a particular client (Data.NO) setup, specifically for
+use with their home-brewed oAuth service, and their particular
+groups-based authorization requirements.
 
 If you'd like to use this with another oAuth service (like Twitter),
 you will need to do some work to move the client-specific code out
@@ -24,7 +25,10 @@ will want to create your own custom login screen.
 
 2. (Optionally) load the Extension, by editing your site .ini file thus:
 
-   ckan.plugins = oauth [other-plugins-if-required]
+      ckan.plugins = oauth [other-plugins-if-required]
+
+   This is optional because you will probably want to make a
+   nicer-looking login form than the one this provides (see below)
 
 3. Configure who.ini to add the repoze.who plugin, something like:
 
