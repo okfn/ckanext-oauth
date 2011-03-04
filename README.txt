@@ -33,7 +33,7 @@ will want to create your own custom login screen.
 3. Configure who.ini to add the repoze.who plugin, something like:
 
     [plugin:oauth]
-    use = ckanext.repoze.who.oauth:make_identification_plugin
+    use = ckanext.repoze.who.oauth.plugin:make_identification_plugin
     consumer_key = xxxxxxxx
     consumer_secret = xxxxxxxx
     request_token_url = https://mi.difi.no/server/oauth/request_token
@@ -44,7 +44,7 @@ will want to create your own custom login screen.
 
     [general]
     request_classifier = repoze.who.classifiers:default_request_classifier
-    challenge_decider = ckanext.repoze.who.oauth:oauth_challenge_decider
+    challenge_decider = ckanext.repoze.who.oauth.plugin:oauth_challenge_decider
 
     [identifiers]
     plugins =
@@ -78,3 +78,16 @@ well not need to use this sort of functionality.  If you do, note that
 the current implementation assumes that group names that look like
 "1234567890 Group Name" are all from the oAuth service.  This
 assumption is the basis of the synchronisation logic.
+
+
+Running tests
+-------------
+
+With your ckan virtualenv activated, run the following command from within pyenv/src/ckan:
+
+    nosetests --ckan ../ckanext-oauth/tests
+
+Note that sometimes the tests fail with a "Connection reset by peer"
+error; you may have to run them a few times to get a full test run
+without these (which aren't true errors; feel free to provide a patch
+to work around this!)
