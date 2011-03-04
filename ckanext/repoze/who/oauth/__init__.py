@@ -31,6 +31,7 @@ class OAuthIdentifierPlugin(AuthTktCookiePlugin):
                  consumer_key='',
                  consumer_secret='',
                  request_token_url='',
+                 callback_url='',
                  access_token_url='',
                  authorize_url='',
                  user_url=''):
@@ -38,6 +39,7 @@ class OAuthIdentifierPlugin(AuthTktCookiePlugin):
         self.consumer_key = consumer_key
         self.consumer_secret = consumer_secret
         self.request_token_url = request_token_url
+        self.callback_url = callback_url
         self.access_token_url = access_token_url
         self.authorize_url = authorize_url
         self.user_url = user_url
@@ -46,7 +48,10 @@ class OAuthIdentifierPlugin(AuthTktCookiePlugin):
         self.client = oauth.Client(self.consumer)
 
     def _get_request_token(self):
-        resp, content = self.client.request(self.request_token_url, "GET")
+        request_plus_callback = "%s?oauth_callback=%s" % \
+                                (self.request_token_url,
+                                 self.callback_url)
+        resp, content = self.client.request(request_plus_callback, "GET")
         if resp['status'] != '200':
             raise Exception("Invalid response %s." % resp['status'])
         tokens = dict(urlparse.parse_qsl(content))
@@ -174,7 +179,7 @@ class OAuthIdentifierPlugin(AuthTktCookiePlugin):
 
 
 def _sync_auth_groups(user, groups):
-    group_pattern = re.compile(r"^(org:)?([0-9]+)/(.+)$")
+    group_pattern = re.compile(r"^(org:)?([0-9]+)[/ ](.+)$")
     # remove all user groups that originate from oauth service
     current_groups = Session.query(AuthorizationGroup)\
                      .filter(AuthorizationGroup.users.contains(user))
@@ -185,7 +190,7 @@ def _sync_auth_groups(user, groups):
     # and create/add the relevant ones
     for group in groups:
         _, group_id, group_name = group_pattern.match(group).groups()
-        authz_group_name = "%s/%s" % (group_id, group_name)
+        authz_group_name = "%s %s" % (group_id, group_name)
         # create an authzgroup if it doesn't exist
         q = Session.query(AuthorizationGroup)
         q = q.filter_by(name=authz_group_name)
@@ -209,7 +214,7 @@ def _sync_auth_groups(user, groups):
         model.Session.remove()
         logging.info("Added user %s to auth group %s" % (user.name,
                                                          authz_group.name))
-                                                         
+
 
 
 def oauth_challenge_decider(environ, status, headers):
