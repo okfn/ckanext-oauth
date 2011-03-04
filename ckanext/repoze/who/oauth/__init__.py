@@ -1,7 +1,6 @@
 import json
 import logging
 import urlparse
-import urllib
 import re
 
 from zope.interface import implements, directlyProvides
@@ -57,14 +56,12 @@ class OAuthIdentifierPlugin(AuthTktCookiePlugin):
         tokens = dict(urlparse.parse_qsl(content))
         request_token = tokens.get('oauth_token')
         request_token_secret = tokens.get('oauth_token_secret')
-        # XXX save/cache it somehow
         logging.info("Got request token %s, secret %s from %s" % \
                      (request_token,
                       request_token_secret,
                       self.request_token_url))
         return request_token, request_token_secret
 
-    # challenge
     def challenge(self, environ, status, app_headers, forget_headers):
         if environ.get('ckan.who.oauth.challenge'):
             del(environ['ckan.who.oauth.challenge'])
@@ -77,11 +74,7 @@ class OAuthIdentifierPlugin(AuthTktCookiePlugin):
                      res.location)
         return res
 
-    # identify
     def identify(self, environ):
-        # XXX commented out for testing, probably a good idea...
-        #if "mi.difi.no" not in environ.get('HTTP_REFERER',''):
-        #    return
         import oauth2 as oauth
         rememberer = self._get_rememberer(environ)
         identity = rememberer and rememberer.identify(environ) or {}
@@ -95,7 +88,6 @@ class OAuthIdentifierPlugin(AuthTktCookiePlugin):
             return identity
         userdata = identity.get('userdata', '')
         found = 'oauth_token' in userdata
-        #import pdb; pdb.set_trace()
         if not found:
             qstring = environ.get('QUERY_STRING')
             if not qstring:
@@ -142,8 +134,6 @@ class OAuthIdentifierPlugin(AuthTktCookiePlugin):
 
     def preauthenticate(self, environ, identity):
         # turn the oauth identity into a CKAN one; set it in our identity
-        # XXX remember/cache the authentication status for X amount of
-        # time
         import oauth2 as oauth
         try:
             access_token = dict(urlparse.parse_qsl(identity['userdata']))
@@ -168,6 +158,7 @@ class OAuthIdentifierPlugin(AuthTktCookiePlugin):
             Session.commit()
             Session.remove()
             logging.info("Preauth: Created new user %s" % user_id)
+        # deal with groups
         user_groups = data['groups']
         _sync_auth_groups(user, user_groups)
         logging.info("Preauth: Returning user identifier %s" % user.name)
@@ -186,7 +177,6 @@ def _sync_auth_groups(user, groups):
     for group in current_groups:
         if group_pattern.match(group.name):
             remove_user_from_authorization_group(user, group)
-
     # and create/add the relevant ones
     for group in groups:
         _, group_id, group_name = group_pattern.match(group).groups()
@@ -214,7 +204,6 @@ def _sync_auth_groups(user, groups):
         model.Session.remove()
         logging.info("Added user %s to auth group %s" % (user.name,
                                                          authz_group.name))
-
 
 
 def oauth_challenge_decider(environ, status, headers):
