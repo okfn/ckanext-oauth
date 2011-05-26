@@ -78,7 +78,6 @@ class OAuthIdentifierPlugin(AuthTktCookiePlugin):
         import oauth2 as oauth
         rememberer = self._get_rememberer(environ)
         identity = rememberer and rememberer.identify(environ) or {}
-        logging.info("Identify: got remembered identity %r" % dict(identity))
         request = Request(environ)
         if request.params.get(LOGIN_MAGIC_KEY):
             # XXX I believe that in repoze.who 2.x this can be
@@ -161,8 +160,9 @@ class OAuthIdentifierPlugin(AuthTktCookiePlugin):
         # deal with groups
         user_groups = data['groups']
         _sync_auth_groups(user, user_groups)
-        logging.info("Preauth: Returning user identifier %s" % user.name)
-        identity['repoze.who.userid'] = user.name
+        name = user.name.encode("utf8")
+        logging.info("Preauth: Returning user identifier %s" % name)
+        identity['repoze.who.userid'] = name 
         return identity
 
     def __repr__(self):
