@@ -150,13 +150,16 @@ class OAuthIdentifierPlugin(AuthTktCookiePlugin):
         user = User.by_openid(user_id)
         if user is None:
             user = User(openid=user_id,
-                        name=data['name'],
+                        name=data['id'],
                         fullname=data['name'],
                         email=data['mail'])
             Session.add(user)
-            Session.commit()
-            Session.remove()
-            logging.info("Preauth: Created new user %s" % user_id)
+		else:
+			user.fullname = data['name'] # if the name is updated
+		Session.commit()
+		Session.remove()
+		logging.info("Preauth: Created new user %s" % user_id)
+
         # deal with groups
         user_groups = data['groups']
         _sync_auth_groups(user, user_groups)
