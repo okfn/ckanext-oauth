@@ -154,11 +154,11 @@ class OAuthIdentifierPlugin(AuthTktCookiePlugin):
                         fullname=data['name'],
                         email=data['mail'])
             Session.add(user)
-		else:
-			user.fullname = data['name'] # if the name is updated
-		Session.commit()
-		Session.remove()
-		logging.info("Preauth: Created new/updated user %s" % user_id)
+        else:
+            user.fullname = data['name'] # if the name is updated
+        Session.commit()
+        Session.remove()
+        logging.info("Preauth: Created new/updated user %s" % user_id)
 
         # deal with groups
         user_groups = data['groups']
